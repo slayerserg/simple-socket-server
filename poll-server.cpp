@@ -12,11 +12,12 @@
 #include <time.h>
 #include <errno.h>
 #include <chrono>
-#include <stdlib.h> 
+#include <stdlib.h>
+#include <poll.h>
 
 #define RECV_DATA_SIZE 256
 #define SEND_DATA_SIZE 205
-#define MAX_CLIENTS 1
+#define MAX_CONN 2
 
 #define TCP_PORT_IN 44818
 
@@ -47,7 +48,9 @@ typedef struct _Client
     in_addr addr;
 } Client;
 
-Client clients[MAX_CLIENTS];
+Client clients;
+
+struct pollfd pollfds[MAX_CONN];
 
 unsigned char recv_data[RECV_DATA_SIZE] = {};
 
@@ -192,90 +195,84 @@ unsigned char reply_5[90] = {0x6f, 0x00, 0x42, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 int wait_client(int tcp_recv_sock) {
-    max_fd = tcp_recv_sock;
-    int client_id;
     int reply_num = 1;
 
+    pollfds[0].fd = tcp_recv_sock;
+    pollfds[0].events = POLLIN | POLLPRI;
+
     while(1) {
-        FD_ZERO(&readfds);
-        FD_SET(tcp_recv_sock, &readfds);
-        for (int i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i].sock != 0) {
-                FD_SET(clients[i].sock, &readfds);
-            }
-        }
+        // FD_ZERO(&readfds);
+        // FD_SET(tcp_recv_sock, &readfds);
+        // for (int i = 0; i < MAX_CLIENTS; i++) {
+        //     if (clients[i].sock != 0) {
+        //         FD_SET(clients[i].sock, &readfds);
+        //     }
+        // }
 
-        int selectResult = select(max_fd + 1, &readfds, NULL, NULL, NULL);
+        //int selectResult = select(max_fd + 1, &readfds, NULL, NULL, NULL);
+        int pollResult = poll(pollfds, 2, 5000);
 
-        if (selectResult > 0) {
-            if (FD_ISSET(tcp_recv_sock, &readfds) && !client_accepted) {
-                for (int i = 0; i < MAX_CLIENTS; i++)
+        if (pollResult > 0) {
+            if (pollfds[0].revents & POLLIN) {
+                if (clients.sock == 0)
                 {
-                    if (clients[i].sock == 0)
-                    {
-                        struct sockaddr_in cliaddr;
-                        socklen_t addrlen = sizeof(cliaddr);
-                        clients[i].sock = accept(tcp_recv_sock, (struct sockaddr *)&cliaddr, &addrlen);
-                        clients[i].addr = cliaddr.sin_addr;
-                        printf("Accept success, IP => %s, sock = %d\n", inet_ntoa(cliaddr.sin_addr), clients[i].sock);
-                        FD_SET(clients[i].sock, &readfds);
-                        if (clients[i].sock > max_fd) {
-                            max_fd = clients[i].sock;
-                        }
-                        client_accepted = true;
-                        client_id = i;
-                        break;
-                        //return i;
-                    }
+                    struct sockaddr_in cliaddr;
+                    socklen_t addrlen = sizeof(cliaddr);
+                    clients.sock = accept(tcp_recv_sock, (struct sockaddr *)&cliaddr, &addrlen);
+                    clients.addr = cliaddr.sin_addr;
+                    printf("Accept success, IP => %s, sock = %d\n", inet_ntoa(cliaddr.sin_addr), clients.sock);
+                    client_accepted = true;
+                    pollfds[1].fd = clients.sock;
+                    pollfds[1].events = POLLIN | POLLPRI;
+                    break;
+                    //return i;
                 }
             }
             if (tcms_client) {
-                for (int i = 0; i < MAX_CLIENTS; i++) {
-                    if (clients[i].sock != 0 && FD_ISSET(clients[i].sock, &readfds)) {
-                        long data_len = 512;
-                        unsigned char incoming_message[data_len] = {0};
+                if (clients.sock != 0 && pollfds[1].revents & POLLIN) {
+                    long data_len = 512;
+                    unsigned char incoming_message[data_len] = {0};
 
 
-                        long number_of_read_bytes = recv(clients[i].sock, incoming_message, data_len, 0);
-                        if (number_of_read_bytes > 0) {
-                            printf("Client data received len = %ld\n", number_of_read_bytes);
-                        }
-                        
-                        if (reply_num == 1 && number_of_read_bytes == 28) {
-                            print_buff(incoming_message, number_of_read_bytes);
-                            printf("Client data send len = %ld\n\n", send(clients[i].sock, (char*)reply_1, REPLY_1_SIZE, 0));
-                            reply_num++;
-                        }
-                        else if (reply_num == 2 && number_of_read_bytes == 48) {
-                            print_buff(incoming_message, number_of_read_bytes);
-                            printf("Client data send len = %ld\n\n", send(clients[i].sock, (char*)reply_2, REPLY_2_SIZE, 0));
-                            reply_num++;
-                        }
-                        else if (reply_num == 3 && number_of_read_bytes == 48) {
-                            print_buff(incoming_message, number_of_read_bytes);
-                            printf("Client data send len = %ld\n\n", send(clients[i].sock, (char*)reply_3, REPLY_3_SIZE, 0));
-                            reply_num++;
-                        }
-                        else if (reply_num == 4 && number_of_read_bytes == 48) {
-                            print_buff(incoming_message, number_of_read_bytes);
-                            printf("Client data send len = %ld\n\n", send(clients[i].sock, (char*)reply_4, REPLY_4_SIZE, 0));
-                            reply_num++;
-                        }
-                        else if (reply_num == 5 && number_of_read_bytes == 90) {
-                            print_buff(incoming_message, number_of_read_bytes);
-                            printf("Client data send len = %ld\n\n", send(clients[i].sock, (char*)reply_5, REPLY_5_SIZE, 0));
-                            reply_num++;
-                            return client_id;
-                        }
+                    long number_of_read_bytes = recv(clients.sock, incoming_message, data_len, 0);
+                    if (number_of_read_bytes > 0) {
+                        printf("Client data received len = %ld\n", number_of_read_bytes);
+                    }
+                    
+                    if (reply_num == 1 && number_of_read_bytes == 28) {
+                        print_buff(incoming_message, number_of_read_bytes);
+                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_1, REPLY_1_SIZE, 0));
+                        reply_num++;
+                    }
+                    else if (reply_num == 2 && number_of_read_bytes == 48) {
+                        print_buff(incoming_message, number_of_read_bytes);
+                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_2, REPLY_2_SIZE, 0));
+                        reply_num++;
+                    }
+                    else if (reply_num == 3 && number_of_read_bytes == 48) {
+                        print_buff(incoming_message, number_of_read_bytes);
+                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_3, REPLY_3_SIZE, 0));
+                        reply_num++;
+                    }
+                    else if (reply_num == 4 && number_of_read_bytes == 48) {
+                        print_buff(incoming_message, number_of_read_bytes);
+                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_4, REPLY_4_SIZE, 0));
+                        reply_num++;
+                    }
+                    else if (reply_num == 5 && number_of_read_bytes == 90) {
+                        print_buff(incoming_message, number_of_read_bytes);
+                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_5, REPLY_5_SIZE, 0));
+                        reply_num++;
+                        return 0;
                     }
                 }
             } else {
-                return client_id;
+                return 0;
             }
         }
         msleep(5);  
     }
-    return client_id;
+    return 0;
 }
 
 void create_udp_recv_socket()
@@ -295,6 +292,9 @@ void create_udp_recv_socket()
         return;
     }
 
+    pollfds[1].fd = udp_recv_sock;
+    pollfds[1].events = POLLIN | POLLPRI;
+
     printf("UDP receiver started\n");
 }
 
@@ -302,26 +302,17 @@ void get_message()
 {
     struct sockaddr_in addr;
 
-    FD_ZERO(&readfds);
+    int pollResult = poll(pollfds, 2, 5000);
 
-    if (udp_recv_sock > 0)
-    {
-        FD_SET(udp_recv_sock, &readfds);
-        max_fd = udp_recv_sock;
-    }
-
-    struct timeval g_time_value;
-    g_time_value.tv_sec = 0;
-    g_time_value.tv_usec = 10000;
-
-    int select_result = select(max_fd + 1, &readfds, 0, 0, &g_time_value);
-
-    if (select_result > 0) {
-        if (FD_ISSET(udp_recv_sock, &readfds))
+    if (pollResult > 0) {
+        printf("Revents server = %d\n", (pollfds[0].revents & POLLIN));
+        printf("Revents client tcp = %d\n", (pollfds[1].revents & POLLIN));
+        //printf("Revents client udp = %d\n", (pollfds[2].revents & POLLIN));
+        if (pollfds[1].revents & POLLIN)
         {
             addr.sin_family = AF_INET;
             addr.sin_port = htons(UDP_PORT_IN);
-            inet_aton(inet_ntoa(clients[0].addr), &(addr.sin_addr));
+            inet_aton(inet_ntoa(clients.addr), &(addr.sin_addr));
             socklen_t addr_size = sizeof(addr);
 
             int size = recvfrom(udp_recv_sock, recv_data, RECV_DATA_SIZE, 0, (struct sockaddr *)&addr, &addr_size);
@@ -337,7 +328,7 @@ void get_message()
                 recv_time = get_time_ms();
             }
         } else {
-            printf("Cycle client: fd not set\n");
+            //printf("Cycle client: fd not set\n");
         }
     }
 }
@@ -356,11 +347,11 @@ int create_udp_send_socket() {
     return 0;
 }
 
-void send_message(int client_id) {
+void send_message() {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(udp_port_out);
-    inet_aton(inet_ntoa(clients[client_id].addr), &(addr.sin_addr));
+    inet_aton(inet_ntoa(clients.addr), &(addr.sin_addr));
 
     printf("\n%lld ", get_time_ms());
     printf("Send heartbeat to client: %d\n", send_data[24]);
@@ -400,7 +391,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int client_id = wait_client(tcp_recv_sock);
+    wait_client(tcp_recv_sock);
 
     create_udp_recv_socket();
     if (udp_recv_sock <= 0) {
@@ -433,12 +424,12 @@ int main(int argc, char *argv[])
         }
 
         if (get_time_ms() - last_send_time >= poll_period - 1) {
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                send_message(i);
+            //for (int i = 0; i < MAX_CLIENTS; i++) {
+                send_message();
                 send_data[10] = send_data[10] + 1;
                 send_data[18] = send_data[18] + 1;
                 send_data[24] = send_data[24] + 1;
-            }
+            //}
         }
         
         msleep(5);

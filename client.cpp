@@ -1,4 +1,3 @@
-#include <QCoreApplication>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -13,12 +12,12 @@
 #define RECV_DATA_SIZE 256
 #define SEND_DATA_SIZE 159
 
-const char *server_ip = "192.168.0.210";
+const char *server_ip = "192.168.0.28";
 
-#define TCP_PORT_OUT 4000
+#define TCP_PORT_OUT 44818
 
-#define UDP_PORT_OUT 9990
-#define UDP_PORT_IN  9991
+#define UDP_PORT_OUT 2222
+#define UDP_PORT_IN  2223
 
 #define POLL_PERIOD 20
 
@@ -34,8 +33,8 @@ int last_hb = 0;
 int unhandled = 0;
 int total_unhandled = 0;
 
-uchar recv_data[RECV_DATA_SIZE] = {};
-uchar send_data[SEND_DATA_SIZE] = \
+unsigned char recv_data[RECV_DATA_SIZE] = {};
+unsigned char send_data[SEND_DATA_SIZE] = \
   {0x01, 0x09, 0x2C, 0x9A, 0x63, 0x36, 0xFF, 0xFF, 0x33, 0x32, 0x31, 0x5A, 0x78, 0x03, 0xFF, 0x00, \
    0x46, 0x52, 0x6C, 0x4F, 0x67, 0x49, 0x6E, 0x31, 0x32, 0x33, 0x21, 0x00, 0x50, 0x77, 0x64, 0x31, \
    0x32, 0x33, 0x24, 0x00, 0x00, 0x00, 0xC0, 0x04, 0x00, 0x20, 0xF1, 0x47, 0x02, 0x07, 0x03, 0x02, \
@@ -47,11 +46,10 @@ uchar send_data[SEND_DATA_SIZE] = \
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-long long get_time_ms(void) {
-    struct timeval tv;
-
-    gettimeofday(&tv,NULL);
-    return (((long long)tv.tv_sec)*1000)+(tv.tv_usec/1000);
+long long get_time_ms () {
+  struct timespec t ;
+  clock_gettime ( CLOCK_REALTIME , & t ) ;
+  return t.tv_sec * 1000 + ( t.tv_nsec + 500000 ) / 1000000 ;
 }
 
 int msleep(long msec)
@@ -75,7 +73,7 @@ int msleep(long msec)
     return res;
 }
 
-void print_buff(uchar *buf, int buf_len) {
+void print_buff(unsigned char *buf, int buf_len) {
     int i = 1;
     while(buf_len > 0) {
         printf("0x%02x, ", *buf);
@@ -145,7 +143,11 @@ void get_message()
     FD_SET(udp_recv_sock, &readfds);
     max_fd = udp_recv_sock;
 
-    int select_result = select(max_fd + 1, &readfds, NULL, NULL, NULL);
+    struct timeval g_time_value;
+    g_time_value.tv_sec = 0;
+    g_time_value.tv_usec = 10000;
+
+    int select_result = select(max_fd + 1, &readfds, 0, 0, &g_time_value);
 
     if (select_result > 0) {
         if (FD_ISSET(udp_recv_sock, &readfds))
@@ -170,7 +172,7 @@ void get_message()
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication a(argc, argv);
+    //QCoreApplication a(argc, argv);
 
     signal(SIGPIPE, SIG_IGN);
 
@@ -179,51 +181,52 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    sleep(10);
+    sleep(2);
 
     if (create_udp_send_socket() != 0) {
         perror("Unable to create send UDP sock");
         exit(1);
     }
 
-//    if (create_udp_recv_socket() <= 0) {
-//        perror("Unable to create receive UDP sock");
-//        exit(1);
-//    }
+   if (create_udp_recv_socket() <= 0) {
+       perror("Unable to create receive UDP sock");
+       exit(1);
+   }
 
     while (1)
     {
         printf("\n%lld\n", get_time_ms());
-        printf("Send heartbeat to server: %d\n", send_data[0]);
+        printf("Send heartbeat to server: %d\n", send_data[24]);
         printf("OUTPUTS:\n");
         print_buff(send_data, SEND_DATA_SIZE);
         send_message();
-        send_data[0] = send_data[0] + 1;
+        send_data[24] = send_data[24] + 1;
 
 
-//        get_message();
-//        printf("\n%lld\n", get_time_ms());
-//        printf("INPUTS:\n");
-//        print_buff(recv_data, RECV_DATA_SIZE);
+        get_message();
+        printf("\n%lld\n", get_time_ms());
+        printf("INPUTS:\n");
+        print_buff(recv_data, RECV_DATA_SIZE);
 
-//        if (last_hb == recv_data[0]) {
-//            total_unhandled++;
-//            unhandled++;
-//        } else {
-//            unhandled = 0;
-//            last_hb = recv_data[0];
-//        }
-//        printf("\n%lld\n", get_time_ms());
-//        printf("Received heartbeat from server: %d\n", recv_data[0]);
-//        printf("Current unhandled = %d, total unhandled = %d\n", unhandled, total_unhandled);
+        if (last_hb == recv_data[24]) {
+            total_unhandled++;
+            unhandled++;
+        } else {
+            unhandled = 0;
+            last_hb = recv_data[24];
+        }
+        
+        printf("\n%lld\n", get_time_ms());
+        printf("Received heartbeat from server: %d\n", recv_data[24]);
+        printf("Current unhandled = %d, total unhandled = %d\n", unhandled, total_unhandled);
 
-//        if (unhandled > 4) {
-//            printf("Current unhandled = %d, STOP", unhandled);
-//            break;
-//        }
+        if (unhandled > 4) {
+            printf("Current unhandled = %d, STOP\n", unhandled);
+            break;
+        }
 
         msleep(POLL_PERIOD);
     }
 
-    return a.exec();
+    return 0;
 }

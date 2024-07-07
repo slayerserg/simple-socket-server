@@ -1,16 +1,25 @@
-CC=g++
-CFLAGS=-Wall
+all : select-server poll-server client
 
-all : simple_server
-
-simple_server : select-server.o
-	g++ -o simple_server select-server.o 
+select-server : select-server.o
+	$(GCC) -o select-server select-server.o 
 
 select-server.o : select-server.cpp
-	g++ -c select-server.cpp
+	$(GCC) -c select-server.cpp
+
+poll-server : poll-server.o
+	$(GCC) -o poll-server poll-server.o 
+
+poll-server.o : poll-server.cpp
+	$(GCC) -c poll-server.cpp
+
+client : client.o
+	$(GCC) -o client client.o 
+
+client.o : client.cpp
+	$(GCC) -c client.cpp
 
 clean:
-	rm -f simple_server
+	rm -f select-server select-server.o client client.o
 
-run: simple_server
-	./simple_server
+run: select-server
+	./select-server
