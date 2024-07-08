@@ -224,8 +224,6 @@ int wait_client(int tcp_recv_sock) {
                     client_accepted = true;
                     pollfds[1].fd = clients.sock;
                     pollfds[1].events = POLLIN | POLLPRI;
-                    break;
-                    //return i;
                 }
             }
             if (tcms_client) {
@@ -305,9 +303,9 @@ void get_message()
     int pollResult = poll(pollfds, 2, 5000);
 
     if (pollResult > 0) {
-        printf("Revents server = %d\n", (pollfds[0].revents & POLLIN));
-        printf("Revents client tcp = %d\n", (pollfds[1].revents & POLLIN));
-        //printf("Revents client udp = %d\n", (pollfds[2].revents & POLLIN));
+        // printf("Revents server = %d\n", (pollfds[0].revents & POLLIN));
+        // printf("Revents client tcp = %d\n", (pollfds[1].revents & POLLIN));
+        // printf("Revents client udp = %d\n", (pollfds[2].revents & POLLIN));
         if (pollfds[1].revents & POLLIN)
         {
             addr.sin_family = AF_INET;

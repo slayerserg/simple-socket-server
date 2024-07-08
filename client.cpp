@@ -12,7 +12,7 @@
 #define RECV_DATA_SIZE 256
 #define SEND_DATA_SIZE 159
 
-const char *server_ip = "192.168.0.28";
+const char *server_ip = "192.168.93.132";
 
 #define TCP_PORT_OUT 44818
 
