@@ -300,7 +300,7 @@ void get_message()
 {
     struct sockaddr_in addr;
 
-    int pollResult = poll(pollfds, 2, 5000);
+    int pollResult = poll(pollfds, 2, 10);
 
     if (pollResult > 0) {
         // printf("Revents server = %d\n", (pollfds[0].revents & POLLIN));
