@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
             }
             if (curr_time - recv_time > poll_period * 5) {
                 printf("%lld Client connection timeout = %ld\n", get_time_ms(), curr_time - recv_time);
-                //break;
+                break;
             }
             if (curr_time - recv_time > poll_period * 200) {
                 printf("%lld Client connection stopped = %ld\n", get_time_ms(), curr_time - recv_time);
