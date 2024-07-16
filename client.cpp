@@ -32,6 +32,8 @@ int max_fd = 0;
 int last_hb = 0;
 int unhandled = 0;
 int total_unhandled = 0;
+unsigned long long total_sent = 0;
+unsigned long long total_received = 0;
 
 unsigned char recv_data[RECV_DATA_SIZE] = {};
 unsigned char send_data[SEND_DATA_SIZE] = \
@@ -111,6 +113,7 @@ void send_message() {
     inet_pton(AF_INET, server_ip, &(addr.sin_addr));
 
     sendto(udp_send_sock, (char*)send_data, SEND_DATA_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
+    total_sent++;
 }
 
 int create_udp_recv_socket()
@@ -164,6 +167,7 @@ void get_message()
                 udp_recv_sock = 0;
                 close(udp_recv_sock);
             }
+            total_received++;
         } else {
             printf("Cycle client: fd not set\n");
         }
@@ -218,7 +222,7 @@ int main(int argc, char *argv[])
         
         printf("\n%lld\n", get_time_ms());
         printf("Received heartbeat from server: %d\n", recv_data[24]);
-        printf("Current unhandled = %d, total unhandled = %d\n", unhandled, total_unhandled);
+        printf("Total sent = %llu, total received = %llu, current unhandled = %d, total unhandled = %d\n", total_sent, total_received, unhandled, total_unhandled);
 
         if (unhandled > 4) {
             printf("Current unhandled = %d, STOP\n", unhandled);
