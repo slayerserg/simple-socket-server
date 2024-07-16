@@ -27,7 +27,6 @@
 int udp_port_out = 2223;
 
 int poll_period = 50;
-bool tcms_client = false;
 
 int tcp_recv_sock = 0;
 
@@ -41,6 +40,7 @@ long recv_time = 0;
 long last_send_time = 0;
 
 bool client_accepted = false;
+bool tcms_client = false;
 
 typedef struct _Client
 {
@@ -360,18 +360,23 @@ void send_message() {
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3) {
+    if (argc < 4) {
         printf("Usage: \n");
-        printf("    ./select-server <poll_period> <tcms_client>\n");
+        printf("    ./select-server <poll_period> <tcms_client> <stop_on_timeout>\n");
         printf("\n");
         printf("Example: \n");
-        printf("    ./select-server 50 true\n");
+        printf("    ./select-server 50 true true\n");
         return 0;
     }
+
+    bool stop_on_timeout = false;
 
     poll_period = atoi(argv[1]);
     if (!strcmp(argv[2], "true")) {
         tcms_client = true;
+    }
+    if (!strcmp(argv[3], "true")) {
+        stop_on_timeout = true;
     }
 
     if (tcms_client) {
@@ -381,6 +386,7 @@ int main(int argc, char *argv[])
     printf("Starting server (select poll method) with settings:\n");
     printf("    - poll_period = %d\n", poll_period);
     printf("    - tcms_client = %s\n", (tcms_client > 0) ? "true" : "false");
+    printf("    - stop_on_timeout = %s\n", (stop_on_timeout > 0) ? "true" : "false");
     printf("\n");
 
     tcp_recv_sock = create_tcp_lsn_socket(TCP_PORT_IN);
@@ -413,9 +419,11 @@ int main(int argc, char *argv[])
             }
             if (curr_time - recv_time > poll_period * 5) {
                 printf("%lld Client connection timeout = %ld\n", get_time_ms(), curr_time - recv_time);
-                break;
+                if (stop_on_timeout) {
+                    break;
+                }
             }
-            if (curr_time - recv_time > poll_period * 200) {
+            if (curr_time - recv_time > poll_period * 1000) {
                 printf("%lld Client connection stopped = %ld\n", get_time_ms(), curr_time - recv_time);
                 break;
             }
