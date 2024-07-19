@@ -33,6 +33,8 @@ int tcp_recv_sock = 0;
 int udp_recv_sock = 0;
 int udp_send_sock = 0;
 
+bool tcms_client = false;
+
 fd_set readfds;
 int max_fd = 0;
 
@@ -230,37 +232,38 @@ int wait_client(int tcp_recv_sock) {
                     long data_len = 512;
                     unsigned char incoming_message[data_len] = {0};
 
-
                     long number_of_read_bytes = recv(clients.sock, incoming_message, data_len, 0);
                     if (number_of_read_bytes > 0) {
-                        printf("Client data received len = %ld\n", number_of_read_bytes);
+                        printf("Received from client data len = %ld\n", number_of_read_bytes);
                     }
                     
                     if (reply_num == 1 && number_of_read_bytes == 28) {
                         print_buff(incoming_message, number_of_read_bytes);
-                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_1, REPLY_1_SIZE, 0));
+                        printf("Send to client data len = %ld\n\n", send(clients.sock, (char*)reply_1, REPLY_1_SIZE, 0));
                         reply_num++;
                     }
                     else if (reply_num == 2 && number_of_read_bytes == 48) {
                         print_buff(incoming_message, number_of_read_bytes);
-                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_2, REPLY_2_SIZE, 0));
+                        printf("Send to client data len = %ld\n\n", send(clients.sock, (char*)reply_2, REPLY_2_SIZE, 0));
                         reply_num++;
                     }
                     else if (reply_num == 3 && number_of_read_bytes == 48) {
                         print_buff(incoming_message, number_of_read_bytes);
-                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_3, REPLY_3_SIZE, 0));
+                        printf("Send to client data len = %ld\n\n", send(clients.sock, (char*)reply_3, REPLY_3_SIZE, 0));
                         reply_num++;
                     }
                     else if (reply_num == 4 && number_of_read_bytes == 48) {
                         print_buff(incoming_message, number_of_read_bytes);
-                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_4, REPLY_4_SIZE, 0));
+                        printf("Send to client data len = %ld\n\n", send(clients.sock, (char*)reply_4, REPLY_4_SIZE, 0));
                         reply_num++;
                     }
                     else if (reply_num == 5 && number_of_read_bytes == 90) {
                         print_buff(incoming_message, number_of_read_bytes);
-                        printf("Client data send len = %ld\n\n", send(clients.sock, (char*)reply_5, REPLY_5_SIZE, 0));
+                        printf("Send to client data len = %ld\n\n", send(clients.sock, (char*)reply_5, REPLY_5_SIZE, 0));
                         reply_num++;
                         return 0;
+                    } else {
+                        printf("TCMS client wrong msg len\n");
                     }
                 }
             } else {
@@ -368,7 +371,6 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    bool tcms_client = false;
     bool stop_on_timeout = false;
 
     poll_period = atoi(argv[1]);
