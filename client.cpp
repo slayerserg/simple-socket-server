@@ -8,23 +8,26 @@
 #include <time.h>
 #include <errno.h>
 #include <signal.h>
+#include <poll.h>
 
 #define RECV_DATA_SIZE 256
 #define SEND_DATA_SIZE 159
 
-const char *server_ip = "192.168.0.210";
+char *server_ip = "192.168.0.210";
 
 #define TCP_PORT_OUT 44818
 
-#define UDP_PORT_OUT 2222
-#define UDP_PORT_IN  2223
+#define UDP_PORT_OUT  2222
+int udp_port_in = 2223;
 
-#define POLL_PERIOD 20
+int poll_period = 20;
 
 int tcp_send_sock = 0;
 
 int udp_recv_sock = 0;
 int udp_send_sock = 0;
+
+bool tcms_client = false;
 
 fd_set readfds;
 int max_fd = 0;
@@ -89,6 +92,50 @@ void print_buff(unsigned char *buf, int buf_len) {
     printf("\n");
 }
 
+#define SRV_REPLY_1_SIZE 28
+#define SRV_REPLY_2_SIZE 54
+#define SRV_REPLY_3_SIZE 229
+#define SRV_REPLY_4_SIZE 203
+#define SRV_REPLY_5_SIZE 90
+
+#define REPLY_1_SIZE 28
+unsigned char reply_1[REPLY_1_SIZE] = \
+{ 0x65, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+};
+
+#define REPLY_2_SIZE 48
+unsigned char reply_2[REPLY_2_SIZE] = \
+{ 0x6f, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0xb2, 0x00, 0x08, 0x00, 0x0e, 0x03, 0x20, 0x04, 0x24, 0x01, 0x30, 0x03
+};
+
+#define REPLY_3_SIZE 48
+unsigned char reply_3[REPLY_3_SIZE] = \
+{ 0x6f, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0xb2, 0x00, 0x08, 0x00, 0x0e, 0x03, 0x20, 0x04, 0x24, 0x64, 0x30, 0x03
+};
+
+#define REPLY_4_SIZE 48
+unsigned char reply_4[REPLY_4_SIZE] = \
+{ 0x6f, 0x00, 0x18, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0xb2, 0x00, 0x08, 0x00, 0x0e, 0x03, 0x20, 0x04, 0x24, 0x65, 0x30, 0x03
+};
+
+#define REPLY_5_SIZE 90
+unsigned char reply_5[REPLY_5_SIZE] = \
+{ 0x6f, 0x00, 0x42, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, \
+  0x00, 0x00, 0x00, 0x00, 0xb2, 0x00, 0x32, 0x00, 0x54, 0x02, 0x20, 0x06, 0x24, 0x01, 0x0a, 0x0a, \
+  0x4d, 0x01, 0x00, 0x00, 0x4e, 0x01, 0x00, 0x00, 0xbc, 0x01, 0xda, 0xfa, 0x0d, 0xf0, 0xad, 0x8b, \
+  0x00, 0x00, 0x00, 0x00, 0x20, 0x4e, 0x00, 0x00, 0xa5, 0x46, 0x20, 0x4e, 0x00, 0x00, 0xbb, 0x40, \
+  0x01, 0x04, 0x20, 0x04, 0x24, 0x01, 0x2c, 0x65, 0x2c, 0x64
+};
+
+
 int connect_to_server() {
     tcp_send_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -98,7 +145,61 @@ int connect_to_server() {
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     inet_aton(server_ip, &(addr.sin_addr));
 
-    return connect(tcp_send_sock, (struct sockaddr *)&addr, sizeof(addr));
+    int res = connect(tcp_send_sock, (struct sockaddr *)&addr, sizeof(addr));
+
+    if (res == 0 && tcms_client) {
+        int reply_num = 1;
+
+        struct pollfd pollfds[2] = {0};
+
+        pollfds[0].fd = tcp_send_sock;
+        pollfds[0].events = POLLIN | POLLPRI;
+
+        send(tcp_send_sock, (char*)reply_1, REPLY_1_SIZE, 0);
+
+        while(1) {
+            int pollResult = poll(pollfds, 2, 5000);
+
+            if (pollResult > 0 && pollfds[0].revents & POLLIN) {
+                long data_len = 512;
+                unsigned char incoming_message[data_len] = {0};
+
+
+                long number_of_read_bytes = recv(tcp_send_sock, incoming_message, data_len, 0);
+                if (number_of_read_bytes > 0) {
+                    printf("Received from server data len = %ld\n", number_of_read_bytes);
+                }
+                
+                if (reply_num == 1 && number_of_read_bytes == SRV_REPLY_1_SIZE) {
+                    print_buff(incoming_message, number_of_read_bytes);
+                    printf("Send to server data len = %ld\n\n", send(tcp_send_sock, (char*)reply_2, REPLY_2_SIZE, 0));
+                    reply_num++;
+                }
+                else if (reply_num == 2 && number_of_read_bytes == SRV_REPLY_2_SIZE) {
+                    print_buff(incoming_message, number_of_read_bytes);
+                    printf("Send to server data len = %ld\n\n", send(tcp_send_sock, (char*)reply_3, REPLY_3_SIZE, 0));
+                    reply_num++;
+                }
+                else if (reply_num == 3 && number_of_read_bytes == SRV_REPLY_3_SIZE) {
+                    print_buff(incoming_message, number_of_read_bytes);
+                    printf("Send to server data len = %ld\n\n", send(tcp_send_sock, (char*)reply_4, REPLY_4_SIZE, 0));
+                    reply_num++;
+                }
+                else if (reply_num == 4 && number_of_read_bytes == SRV_REPLY_4_SIZE) {
+                    print_buff(incoming_message, number_of_read_bytes);
+                    printf("Send to server data len = %ld\n\n", send(tcp_send_sock, (char*)reply_5, REPLY_5_SIZE, 0));
+                    reply_num++;
+                }
+                else if (reply_num == 5 && number_of_read_bytes == SRV_REPLY_5_SIZE) {
+                    print_buff(incoming_message, number_of_read_bytes);
+                    reply_num++;
+                    return 0;
+                }
+            }
+        }
+        
+    }
+    return res;
 }
 
 int create_udp_send_socket() {
@@ -122,7 +223,7 @@ int create_udp_recv_socket()
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(UDP_PORT_IN);
+    addr.sin_port = htons(udp_port_in);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     int bindResult = bind(udp_recv_sock, (struct sockaddr *)&addr, sizeof(addr));
@@ -156,7 +257,7 @@ void get_message()
         if (FD_ISSET(udp_recv_sock, &readfds))
         {
             addr.sin_family = AF_INET;
-            addr.sin_port = htons(UDP_PORT_IN);
+            addr.sin_port = htons(udp_port_in);
             inet_aton(server_ip, &(addr.sin_addr));
             socklen_t addr_size = sizeof(addr);
 
@@ -176,7 +277,25 @@ void get_message()
 
 int main(int argc, char *argv[])
 {
-    //QCoreApplication a(argc, argv);
+    if (argc < 3) {
+        printf("Usage: \n");
+        printf("    ./client <server> <poll_period> <work_as_tcms>\n");
+        printf("\n");
+        printf("Example: \n");
+        printf("    ./client 192.168.1.1 50 true\n");
+        return 0;
+    }
+
+    server_ip = argv[1];
+    poll_period = atoi(argv[2]);
+
+    if (!strcmp(argv[3], "true")) {
+        tcms_client = true;
+    }
+
+    if (tcms_client) {
+        udp_port_in = 2222;
+    }
 
     signal(SIGPIPE, SIG_IGN);
 
@@ -184,8 +303,6 @@ int main(int argc, char *argv[])
         perror("Unable to connect TCP");
         exit(1);
     }
-
-    sleep(2);
 
     if (create_udp_send_socket() != 0) {
         perror("Unable to create send UDP sock");
@@ -229,7 +346,7 @@ int main(int argc, char *argv[])
             break;
         }
 
-        msleep(POLL_PERIOD);
+        msleep(poll_period);
     }
 
     return 0;
